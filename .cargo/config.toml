@@ -1,0 +1,8 @@
+[target.'cfg(all())']
+rustflags = ["-D", "warnings"]
+
+[build]
+jobs = 4
+
+[term]
+color = "auto"
