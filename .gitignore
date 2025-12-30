@@ -1,1 +1,17 @@
 /target
+
+.claude/
+
+.github/
+
+// ignore node_modules in frontend
+frontend/node_modules/
+
+// list node gitignore files
+**/node_modules/
+**/dist/
+**/build/
+**/out/
+**/target/
+**/coverage/
+**/.DS_Store
