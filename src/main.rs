@@ -8,6 +8,7 @@ mod types;
 mod utils;
 
 use state::image_state::ImageState;
+use commands::export_commands;
 use commands::image_commands;
 
 fn main() {
@@ -16,6 +17,10 @@ fn main() {
         .manage(ImageState::new())
         .invoke_handler(tauri::generate_handler![
             image_commands::open_image,
+            image_commands::apply_operation,
+            image_commands::undo,
+            image_commands::redo,
+            export_commands::export_image_command,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

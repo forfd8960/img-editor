@@ -1,23 +1,23 @@
 use serde::{Deserialize, Serialize};
 
-/// Operation type enumeration
+/// Operation parameters (tagged union)
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(tag = "operation_type", content = "params", rename_all = "PascalCase")]
 pub enum OperationType {
-    Filter,
-    Adjustment,
-    Transform,
-    Crop,
+    Filter(FilterType),
+    Adjustment(AdjustmentParams),
+    Transform(TransformType),
+    Crop(CropRect),
 }
 
 /// Filter types
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum FilterType {
     Grayscale,
     Sepia,
     Invert,
-    Blur,
+    Blur { radius: f32 },
     Sharpen,
 }
 
@@ -56,28 +56,10 @@ pub struct CropRect {
     pub height: u32,
 }
 
-/// Operation parameters (tagged union)
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "op", rename_all = "snake_case")]
-pub enum OperationParams {
-    Filter {
-        filter_type: FilterType,
-        intensity: f32,
-    },
-    Adjustment(AdjustmentParams),
-    Transform(TransformType),
-    Crop {
-        rect: CropRect,
-        maintain_aspect_ratio: Option<f32>,
-    },
-}
-
 /// Edit operation structure
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EditOperation {
     pub id: String,
-    #[serde(rename = "type")]
-    pub operation_type: OperationType,
-    #[serde(flatten)]
-    pub params: OperationParams,
+    pub operation: OperationType,
+    pub timestamp: i64,
 }

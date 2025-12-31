@@ -4,7 +4,9 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::core::history_manager::HistoryManager;
+use crate::core::image_processor::ImageProcessor;
 use crate::types::errors::AppError;
+use crate::types::operations::{EditOperation, OperationType};
 use crate::utils::preview::resize_to_fit;
 
 /// Preview cache structure
@@ -145,6 +147,116 @@ impl ImageState {
         .map_err(|e| AppError::ProcessingError { details: e.to_string() })??;
 
         Ok(base64)
+    }
+
+    /// Apply an operation to the current image
+    pub async fn apply_operation(&self, operation: EditOperation) -> Result<(), AppError> {
+        // Load current image
+        let current = self.current_image.load();
+        let image = current
+            .as_ref()
+            .as_ref()
+            .ok_or_else(|| AppError::StateError { message: "No image loaded".to_string() })?
+            .clone();
+
+        let operation_clone = operation.clone();
+        
+        // Apply operation in blocking thread
+        let result = tokio::task::spawn_blocking(move || {
+            ImageProcessor::apply_operation(&image, &operation_clone.operation)
+        })
+        .await
+        .map_err(|e| AppError::ProcessingError { details: e.to_string() })??;
+
+        // Store result
+        self.current_image.store(Arc::new(Some(result)));
+        
+        // Add to history
+        self.history.add_operation(operation);
+
+        Ok(())
+    }
+
+    /// Undo the last operation
+    pub async fn undo(&self) -> Result<(), AppError> {
+        // Undo in history and get updated operations list
+        let operations = self.history.undo()
+            .ok_or_else(|| AppError::StateError { 
+                message: "Nothing to undo".to_string() 
+            })?;
+
+        // Rebuild current image from original + history
+        self.rebuild_from_operations(operations).await?;
+
+        Ok(())
+    }
+
+    /// Redo the last undone operation
+    pub async fn redo(&self) -> Result<(), AppError> {
+        // Redo in history and get updated operations list
+        let operations = self.history.redo()
+            .ok_or_else(|| AppError::StateError { 
+                message: "Nothing to redo".to_string() 
+            })?;
+
+        // Rebuild current image from original + history
+        self.rebuild_from_operations(operations).await?;
+
+        Ok(())
+    }
+
+    /// Rebuild current image from a list of edit operations
+    async fn rebuild_from_operations(&self, operations: Vec<EditOperation>) -> Result<(), AppError> {
+        // Load original image
+        let original = self.original_image.load();
+        let image = original
+            .as_ref()
+            .as_ref()
+            .ok_or_else(|| AppError::StateError { message: "No image loaded".to_string() })?
+            .clone();
+
+        // Extract operation types
+        let op_types: Vec<OperationType> = operations
+            .iter()
+            .map(|op| op.operation.clone())
+            .collect();
+
+        // Apply all operations in blocking thread
+        let result = if op_types.is_empty() {
+            image
+        } else {
+            tokio::task::spawn_blocking(move || {
+                ImageProcessor::apply_operations(&image, &op_types)
+            })
+            .await
+            .map_err(|e| AppError::ProcessingError { details: e.to_string() })??
+        };
+
+        // Store result
+        self.current_image.store(Arc::new(Some(result)));
+
+        Ok(())
+    }
+
+    /// Render image with operations applied (for preview)
+    #[allow(dead_code)]
+    pub async fn render_with_operations(&self, operations: Vec<OperationType>) -> Result<DynamicImage, AppError> {
+        // Load original image
+        let original = self.original_image.load();
+        let image = original
+            .as_ref()
+            .as_ref()
+            .ok_or_else(|| AppError::StateError { message: "No image loaded".to_string() })?
+            .clone();
+
+        // Apply operations in blocking thread
+        let result = tokio::task::spawn_blocking(move || {
+            ImageProcessor::apply_operations(&image, &operations)
+        })
+        .await
+        .map_err(|e| AppError::ProcessingError { details: e.to_string() })??;
+
+        Ok(result)
     }
 }
 
